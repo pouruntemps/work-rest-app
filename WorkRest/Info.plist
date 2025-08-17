@@ -2,7 +2,5 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSUserNotificationUsageDescription</key>
-	<string>This app uses notifications to alert you when the timer finishes.</string>
 </dict>
 </plist>

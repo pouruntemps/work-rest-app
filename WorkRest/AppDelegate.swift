@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
@@ -6,6 +7,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var timerModel = TimerModel()
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Request notification permissions
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error = error {
+                print("Notification permission error: \(error)")
+            }
+        }
+        
         // Setup the status item (menu bar icon)
         // Hide the Dock icon here, where NSApp is ready!
             NSApp.setActivationPolicy(.accessory)
@@ -57,9 +65,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func showNotification() {
-        let notification = NSUserNotification()
-        notification.title = "Time's up!"
-        notification.informativeText = "Work / Rest timer finished."
-        NSUserNotificationCenter.default.deliver(notification)
+        let content = UNMutableNotificationContent()
+        content.title = "Time's up. Time to rest."
+        content.body = "Work / Rest timer finished."
+        content.sound = .default
+        
+        let request = UNNotificationRequest(identifier: "timer-complete", content: content, trigger: nil)
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error showing notification: \(error)")
+            }
+        }
     }
 }
