@@ -1,32 +1,56 @@
 import SwiftUI
+import UserNotifications
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     var statusItem: NSStatusItem!
     var popover: NSPopover!
     var timerModel = TimerModel()
+    var multiTimerModel = MultiTimerModel()
+    
+    var selectedTab: TimerTab = .single
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Hide the Dock icon
+        NSApp.setActivationPolicy(.accessory)
+        
+        // Request notification permissions
+        UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error = error {
+                print("Notification permission error: \(error)")
+            }
+        }
+        
         // Setup the status item (menu bar icon)
-        // Hide the Dock icon here, where NSApp is ready!
-            NSApp.setActivationPolicy(.accessory)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = timerModel.menuBarTitle // This ensures .button is not nil!
-//        updateStatusItem()
+        statusItem.button?.title = timerModel.menuBarTitle
         
         // Setup popover
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 220, height: 120)
+        popover.contentSize = NSSize(width: 220, height: 280)
         popover.behavior = .transient
-        popover.contentViewController = NSHostingController(rootView: PopoverView(model: timerModel, onUpdate: {
-            self.updateStatusItem()
-        }))
+        updatePopoverContent()
         
-        // Listen to timer updates
+        // Listen to single timer updates
         timerModel.onTick = { [weak self] in
             self?.updateStatusItem()
         }
         timerModel.onTimerEnd = { [weak self] in
-            self?.showNotification()
+            self?.showNotification(title: "Time's up!", message: "Work / Rest timer finished.")
+            self?.updateStatusItem()
+        }
+        
+        // Listen to multi timer updates
+        multiTimerModel.onTick = { [weak self] in
+            self?.updateStatusItem()
+        }
+        multiTimerModel.onTimerEnd = { [weak self] index in
+            guard let self = self else { return }
+            let message = self.multiTimerModel.endMessages[index]
+            self.showNotification(title: "WorkRest", message: message)
+            self.updateStatusItem()
+        }
+        multiTimerModel.onAllTimersComplete = { [weak self] in
             self?.updateStatusItem()
         }
         
@@ -39,8 +63,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func updateStatusItem() {
         if let button = statusItem.button {
-            button.title = timerModel.menuBarTitle
+            if selectedTab == .single {
+                button.title = timerModel.menuBarTitle
+            } else {
+                button.title = multiTimerModel.menuBarTitle
+            }
         }
+    }
+    
+    func updatePopoverContent() {
+        popover.contentViewController = NSHostingController(rootView: 
+            PopoverView(
+                model: timerModel,
+                multiModel: multiTimerModel,
+                initialTab: selectedTab,
+                onTabChange: { newTab in
+                    self.selectedTab = newTab
+                    self.updateStatusItem()
+                },
+                onUpdate: {
+                    self.updateStatusItem()
+                }
+            )
+        )
     }
     
     @objc func togglePopover(_ sender: AnyObject?) {
@@ -48,18 +93,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if popover.isShown {
                 popover.performClose(sender)
             } else {
-                popover.contentViewController = NSHostingController(rootView: PopoverView(model: timerModel, onUpdate: {
-                    self.updateStatusItem()
-                }))
+                updatePopoverContent()
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             }
         }
     }
     
-    func showNotification() {
-        let notification = NSUserNotification()
-        notification.title = "Time's up!"
-        notification.informativeText = "Work / Rest timer finished."
-        NSUserNotificationCenter.default.deliver(notification)
+    func showNotification(title: String, message: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = message
+        content.sound = .default
+        
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil // Deliver immediately
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Failed to deliver notification: \(error)")
+            }
+        }
+    }
+    
+    // Show notifications even when app is in foreground
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound])
     }
 }
